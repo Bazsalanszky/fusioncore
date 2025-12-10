@@ -2,6 +2,7 @@ package gui
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
 	"github.com/bazsalanszky/fusioncore/internal/config"
 	"github.com/bazsalanszky/fusioncore/internal/extractor"
@@ -29,6 +31,107 @@ func buildUI(w fyne.Window, state *AppState) (fyne.CanvasObject, *widget.Progres
 
 	progressBar := widget.NewProgressBar()
 	progressBar.Hide()
+
+	// Menu
+	fileMenu := fyne.NewMenu("File",
+		fyne.NewMenuItem("Add ba2 from file", func() {
+			fd := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
+				if err != nil {
+					showErrorDialog(err, w)
+					return
+				}
+				if reader == nil {
+					return
+				}
+				defer reader.Close()
+
+				homeDir, err := os.UserHomeDir()
+				if err != nil {
+					showErrorDialog(err, w)
+					return
+				}
+				modsDir := filepath.Join(homeDir, "Games", "FusionCore", "Mods", "Fallout76")
+
+				fileName := reader.URI().Name()
+				modName := strings.TrimSuffix(fileName, filepath.Ext(fileName))
+				modDir := filepath.Join(modsDir, modName)
+
+				if err := os.MkdirAll(modDir, 0755); err != nil {
+					showErrorDialog(err, w)
+					return
+				}
+
+				destPath := filepath.Join(modDir, fileName)
+				destFile, err := os.Create(destPath)
+				if err != nil {
+					showErrorDialog(err, w)
+					return
+				}
+				defer destFile.Close()
+
+				if _, err := io.Copy(destFile, reader); err != nil {
+					showErrorDialog(err, w)
+					return
+				}
+
+				newMod := &mod.Mod{
+					Name:   modName,
+					Path:   modDir,
+					Active: false,
+					ModID:  "local",
+					FileID: "local",
+				}
+				state.mods = append(state.mods, newMod)
+				if err := mod.SaveMods(state.mods); err != nil {
+					showErrorDialog(err, w)
+					return
+				}
+				modList.Refresh()
+			}, w)
+			fd.SetFilter(storage.NewExtensionFileFilter([]string{".ba2"}))
+			fd.Show()
+		}),
+		fyne.NewMenuItem("Load from URL (nxm://)", func() {
+			entry := widget.NewEntry()
+			dialog.ShowCustomConfirm("Load from URL", "Load", "Cancel", entry, func(confirm bool) {
+				if confirm {
+					go handleDownload(entry.Text, progressBar, modList, w, state)
+				}
+			}, w)
+		}),
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Exit", func() {
+			w.Close()
+		}),
+	)
+
+	accountMenu := fyne.NewMenu("Account",
+		fyne.NewMenuItem("Switch Account", func() {
+			cfg, err := config.LoadConfig()
+			if err != nil {
+				showErrorDialog(err, w)
+				return
+			}
+			cfg.APIKey = ""
+			if err := config.SaveConfig(cfg); err != nil {
+				showErrorDialog(err, w)
+				return
+			}
+			dialog.ShowInformation("Switch Account", "Please restart the application to switch accounts.", w)
+		}),
+	)
+
+	gamesMenu := fyne.NewMenu("Games",
+		fyne.NewMenuItem("Fallout 76", func() {
+			// Already active
+		}),
+		fyne.NewMenuItem("Fallout 4", func() {
+			dialog.ShowInformation("Switch Game", "Fallout 4 support coming soon!", w)
+		}),
+	)
+
+	mainMenu := fyne.NewMainMenu(fileMenu, accountMenu, gamesMenu)
+	w.SetMainMenu(mainMenu)
 
 	return container.NewBorder(top, progressBar, nil, nil, modList), progressBar, usernameLabel, launchButton, modList
 }
