@@ -92,7 +92,7 @@ func GetDownloadURL(info *NxmInfo, apiKey string) (string, error) {
 }
 
 // DownloadFile downloads a file from a URL to a specified directory.
-func DownloadFile(url, destDir string) (string, error) {
+func DownloadFile(url, destDir string, progressCb func(float64)) (string, error) {
 	resp, err := http.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("failed to download file: %w", err)
@@ -125,11 +125,42 @@ func DownloadFile(url, destDir string) (string, error) {
 	}
 	defer out.Close()
 
+	// Create a progress writer to track download progress.
+	progressWriter := &ProgressWriter{
+		Writer:         out,
+		Total:          resp.ContentLength,
+		ProgressReport: progressCb,
+	}
+
 	// Copy the file content.
-	_, err = io.Copy(out, resp.Body)
+	_, err = io.Copy(progressWriter, resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("failed to save file: %w", err)
 	}
 
 	return filePath, nil
 }
+
+// ProgressWriter is a wrapper around an io.Writer that reports progress.
+type ProgressWriter struct {
+	Writer         io.Writer
+	Total          int64
+	Written        int64
+	ProgressReport func(float64)
+}
+
+// Write implements the io.Writer interface.
+func (pw *ProgressWriter) Write(p []byte) (int, error) {
+	n, err := pw.Writer.Write(p)
+	if err != nil {
+		return n, err
+	}
+
+	pw.Written += int64(n)
+	if pw.ProgressReport != nil {
+		pw.ProgressReport(float64(pw.Written) / float64(pw.Total))
+	}
+
+	return n, nil
+}
+
