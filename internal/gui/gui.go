@@ -15,6 +15,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
+	"github.com/bazsalanszky/fusioncore/assets"
 	"github.com/bazsalanszky/fusioncore/internal/config"
 	"github.com/bazsalanszky/fusioncore/internal/extractor"
 	"github.com/bazsalanszky/fusioncore/internal/games"
@@ -313,6 +314,7 @@ func updateUsername(usernameChan chan string, w fyne.Window) {
 
 func Show(nxmURL string) {
 	a := app.NewWithID("eu.toldi.fusioncore")
+	a.SetIcon(fyne.NewStaticResource("icon.png", assets.Icon))
 	a.Settings().SetTheme(&fusionTheme{})
 	w := a.NewWindow("Fusion Core ☢️")
 	w.Resize(fyne.NewSize(1000, 700))
