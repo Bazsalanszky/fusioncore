@@ -1,45 +1,125 @@
 package gui
 
 import (
+	"fmt"
+	"image/color"
+	"net/url"
+	"os"
+
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/bazsalanszky/fusioncore/internal/mod"
 	"github.com/bazsalanszky/fusioncore/internal/vfs"
-	"net/url"
-	"os"
 )
 
 func newAPIKeyWindow(a fyne.App, onSave func(string)) fyne.Window {
-	w := a.NewWindow("Nexus API Key")
-	w.Resize(fyne.NewSize(400, 200))
+	w := a.NewWindow("Nexus API Key Setup")
+	w.Resize(fyne.NewSize(500, 300))
+	w.CenterOnScreen()
 
-	apiKeyEntry := widget.NewPasswordEntry()
-	apiKeyEntry.SetPlaceHolder("Enter your API key")
-
-	infoLabel := widget.NewLabel("You can get your API key from the Nexus Mods website.")
-
+	// Header
+	header := widget.NewRichTextFromMarkdown("## 🔑 Nexus API Key Required")
+	
+	// Info card
+	infoCard := canvas.NewRectangle(color.NRGBA{R: 33, G: 150, B: 243, A: 50})
+	infoCard.CornerRadius = 8
+	
+	infoText := widget.NewRichTextFromMarkdown(
+		"To download mods from Nexus, you need to provide your API key.\n\n" +
+		"**Steps:**\n" +
+		"1. Click the link below to open Nexus Mods\n" +
+		"2. Log in to your account\n" +
+		"3. Copy your Personal API Key\n" +
+		"4. Paste it in the field below",
+	)
+	
+	infoContainer := container.NewStack(
+		infoCard,
+		container.NewPadded(infoText),
+	)
+	
 	nexusURL, _ := url.Parse("https://www.nexusmods.com/users/myaccount?tab=api")
-	hyperlink := widget.NewHyperlink("Get API Key", nexusURL)
-
-	saveButton := widget.NewButton("Save", func() {
+	hyperlink := widget.NewHyperlink("🌐 Get Your API Key", nexusURL)
+	
+	apiKeyEntry := widget.NewPasswordEntry()
+	apiKeyEntry.SetPlaceHolder("Paste your API key here...")
+	
+	saveButton := widget.NewButtonWithIcon("Save & Continue", theme.ConfirmIcon(), func() {
 		onSave(apiKeyEntry.Text)
 		w.Close()
 	})
-
-	w.SetContent(container.NewVBox(
-		infoLabel,
-		hyperlink,
-		apiKeyEntry,
+	saveButton.Importance = widget.HighImportance
+	
+	cancelButton := widget.NewButtonWithIcon("Cancel", theme.CancelIcon(), func() {
+		w.Close()
+	})
+	
+	buttonRow := container.NewHBox(
+		layout.NewSpacer(),
+		cancelButton,
 		saveButton,
-	))
-
+	)
+	
+	content := container.NewVBox(
+		header,
+		widget.NewSeparator(),
+		infoContainer,
+		hyperlink,
+		widget.NewLabel("API Key:"),
+		apiKeyEntry,
+		buttonRow,
+	)
+	
+	w.SetContent(container.NewPadded(content))
 	return w
 }
 
 func showErrorDialog(err error, w fyne.Window) {
 	dialog.ShowError(err, w)
+}
+
+// Custom theme for Fusion Core
+type fusionTheme struct{}
+
+func (f *fusionTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
+	switch name {
+	case theme.ColorNameBackground:
+		return color.NRGBA{R: 18, G: 18, B: 18, A: 255}
+	case theme.ColorNameButton:
+		return color.NRGBA{R: 63, G: 81, B: 181, A: 255}
+	case theme.ColorNamePrimary:
+		return color.NRGBA{R: 255, G: 193, B: 7, A: 255} // Fallout yellow
+	case theme.ColorNameSuccess:
+		return color.NRGBA{R: 76, G: 175, B: 80, A: 255}
+	case theme.ColorNameError:
+		return color.NRGBA{R: 244, G: 67, B: 54, A: 255}
+	default:
+		return theme.DefaultTheme().Color(name, variant)
+	}
+}
+
+func (f *fusionTheme) Font(style fyne.TextStyle) fyne.Resource {
+	return theme.DefaultTheme().Font(style)
+}
+
+func (f *fusionTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
+	return theme.DefaultTheme().Icon(name)
+}
+
+func (f *fusionTheme) Size(name fyne.ThemeSizeName) float32 {
+	switch name {
+	case theme.SizeNamePadding:
+		return 8
+	case theme.SizeNameInlineIcon:
+		return 20
+	default:
+		return theme.DefaultTheme().Size(name)
+	}
 }
 
 func newModList(w fyne.Window, state *AppState) (*widget.List, []*mod.Mod) {
@@ -49,47 +129,80 @@ func newModList(w fyne.Window, state *AppState) (*widget.List, []*mod.Mod) {
 			return len(state.mods)
 		},
 		func() fyne.CanvasObject {
-			activateButton := widget.NewButton("Activate", nil)
-			deactivateButton := widget.NewButton("Deactivate", nil)
-			uninstallButton := widget.NewButton("Uninstall", nil)
-			return container.NewBorder(
-				nil,
-				nil,
-				nil,
-				container.NewHBox(
-					activateButton,
-					deactivateButton,
-					uninstallButton,
-				),
-				widget.NewLabel(""),
+			// Create mod card
+			card := canvas.NewRectangle(color.NRGBA{R: 40, G: 44, B: 52, A: 255})
+			card.CornerRadius = 8
+			
+			statusIndicator := canvas.NewCircle(color.NRGBA{R: 100, G: 100, B: 100, A: 255})
+			statusIndicator.Resize(fyne.NewSize(12, 12))
+			
+			modName := widget.NewRichTextFromMarkdown("**Mod Name**")
+			modStatus := widget.NewLabel("Status")
+			modStatus.TextStyle.Italic = true
+			
+			activateBtn := widget.NewButtonWithIcon("", theme.MediaPlayIcon(), nil)
+			activateBtn.Importance = widget.HighImportance
+			deactivateBtn := widget.NewButtonWithIcon("", theme.MediaPauseIcon(), nil)
+			uninstallBtn := widget.NewButtonWithIcon("", theme.DeleteIcon(), nil)
+			uninstallBtn.Importance = widget.DangerImportance
+			
+			headerRow := container.NewHBox(
+				statusIndicator,
+				modName,
+				layout.NewSpacer(),
+				activateBtn,
+				deactivateBtn,
+				uninstallBtn,
+			)
+			
+			cardContent := container.NewVBox(
+				headerRow,
+				modStatus,
+			)
+			
+			return container.NewStack(
+				card,
+				container.NewPadded(cardContent),
 			)
 		},
 		func(i widget.ListItemID, o fyne.CanvasObject) {
 			m := state.mods[i]
-			status := "inactive"
+			stackContainer := o.(*fyne.Container)
+			cardContent := stackContainer.Objects[1].(*fyne.Container)
+			vboxContent := cardContent.Objects[0].(*fyne.Container)
+			headerRow := vboxContent.Objects[0].(*fyne.Container)
+			statusLabel := vboxContent.Objects[1].(*widget.Label)
+			
+			statusIndicator := headerRow.Objects[0].(*canvas.Circle)
+			modName := headerRow.Objects[1].(*widget.RichText)
+			activateBtn := headerRow.Objects[3].(*widget.Button)
+			deactivateBtn := headerRow.Objects[4].(*widget.Button)
+			uninstallBtn := headerRow.Objects[5].(*widget.Button)
+			
+			modName.ParseMarkdown(fmt.Sprintf("**%s**", m.Name))
+			
 			if m.Active {
-				status = "active"
+				statusIndicator.FillColor = color.NRGBA{R: 76, G: 175, B: 80, A: 255} // Green
+				statusLabel.SetText("✓ Active")
+				statusLabel.Importance = widget.SuccessImportance
+			} else {
+				statusIndicator.FillColor = color.NRGBA{R: 158, G: 158, B: 158, A: 255} // Gray
+				statusLabel.SetText("⏸ Inactive")
+				statusLabel.Importance = widget.MediumImportance
 			}
-			c := o.(*fyne.Container)
-			label := c.Objects[0].(*widget.Label)
-			hbox := c.Objects[1].(*fyne.Container)
-			label.SetText(m.Name + " (" + status + ")")
+			statusIndicator.Refresh()
 
-			activateButton := hbox.Objects[0].(*widget.Button)
-			deactivateButton := hbox.Objects[1].(*widget.Button)
-			uninstallButton := hbox.Objects[2].(*widget.Button)
-
-			activateButton.OnTapped = func() {
+			activateBtn.OnTapped = func() {
 				vfs.Activate(m.Name)
 				state.mods, _ = mod.LoadMods()
 				modList.Refresh()
 			}
-			deactivateButton.OnTapped = func() {
+			deactivateBtn.OnTapped = func() {
 				vfs.Deactivate(m.Name)
 				state.mods, _ = mod.LoadMods()
 				modList.Refresh()
 			}
-			uninstallButton.OnTapped = func() {
+			uninstallBtn.OnTapped = func() {
 				dialog.ShowConfirm("Uninstall Mod", "Are you sure you want to uninstall "+m.Name+"?", func(confirm bool) {
 					if !confirm {
 						return
@@ -118,11 +231,11 @@ func newModList(w fyne.Window, state *AppState) (*widget.List, []*mod.Mod) {
 			}
 
 			if m.Active {
-				activateButton.Disable()
-				deactivateButton.Enable()
+				activateBtn.Disable()
+				deactivateBtn.Enable()
 			} else {
-				activateButton.Enable()
-				deactivateButton.Disable()
+				activateBtn.Enable()
+				deactivateBtn.Disable()
 			}
 		},
 	)
@@ -130,14 +243,25 @@ func newModList(w fyne.Window, state *AppState) (*widget.List, []*mod.Mod) {
 	return modList, state.mods
 }
 
-func newTopBar(w fyne.Window) (fyne.CanvasObject, *widget.Label, *widget.Button) {
-	usernameLabel := widget.NewLabel("Fetching username...")
-	launchButton := widget.NewButton("Launch Game", nil)
-
-	top := container.NewVBox(
-		container.NewHBox(usernameLabel, launchButton),
-		widget.NewSeparator(),
+func newHeader(w fyne.Window) fyne.CanvasObject {
+	title := widget.NewRichTextFromMarkdown("# Fusion Core ☢️")
+	subtitle := widget.NewLabel("Powering Fallout Mods on Linux")
+	subtitle.TextStyle.Italic = true
+	
+	header := container.NewVBox(
+		title,
+		subtitle,
 	)
+	
+	return container.NewPadded(header)
+}
 
-	return top, usernameLabel, launchButton
+func newStatusBar(w fyne.Window) (*widget.Label, *widget.Button) {
+	usernameLabel := widget.NewLabel("Fetching username...")
+	usernameLabel.TextStyle.Monospace = true
+	
+	launchButton := widget.NewButtonWithIcon("Launch Fallout 76", theme.MediaPlayIcon(), nil)
+	launchButton.Importance = widget.HighImportance
+	
+	return usernameLabel, launchButton
 }

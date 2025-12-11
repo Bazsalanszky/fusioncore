@@ -12,10 +12,12 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
 	"github.com/bazsalanszky/fusioncore/internal/config"
 	"github.com/bazsalanszky/fusioncore/internal/extractor"
+	"github.com/bazsalanszky/fusioncore/internal/instance"
 	"github.com/bazsalanszky/fusioncore/internal/mod"
 	"github.com/bazsalanszky/fusioncore/internal/nexus"
 	"github.com/bazsalanszky/fusioncore/internal/vfs"
@@ -26,11 +28,31 @@ type AppState struct {
 }
 
 func buildUI(w fyne.Window, state *AppState) (fyne.CanvasObject, *widget.ProgressBar, *widget.Label, *widget.Button, *widget.List) {
-	top, usernameLabel, launchButton := newTopBar(w)
+	header := newHeader(w)
+	usernameLabel, launchButton := newStatusBar(w)
 	modList, _ := newModList(w, state)
 
 	progressBar := widget.NewProgressBar()
 	progressBar.Hide()
+
+	// Create main content area with padding
+	content := container.NewPadded(
+		container.NewBorder(
+			header,
+			container.NewVBox(
+				widget.NewSeparator(),
+				container.NewHBox(
+					layout.NewSpacer(),
+					usernameLabel,
+					launchButton,
+				),
+				progressBar,
+			),
+			nil,
+			nil,
+			modList,
+		),
+	)
 
 	// Menu
 	fileMenu := fyne.NewMenu("File",
@@ -99,10 +121,6 @@ func buildUI(w fyne.Window, state *AppState) (fyne.CanvasObject, *widget.Progres
 				}
 			}, w)
 		}),
-		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem("Exit", func() {
-			w.Close()
-		}),
 	)
 
 	accountMenu := fyne.NewMenu("Account",
@@ -133,7 +151,7 @@ func buildUI(w fyne.Window, state *AppState) (fyne.CanvasObject, *widget.Progres
 	mainMenu := fyne.NewMainMenu(fileMenu, accountMenu, gamesMenu)
 	w.SetMainMenu(mainMenu)
 
-	return container.NewBorder(top, progressBar, nil, nil, modList), progressBar, usernameLabel, launchButton, modList
+	return content, progressBar, usernameLabel, launchButton, modList
 }
 
 func handleDownload(nxmURL string, progressBar *widget.ProgressBar, modList *widget.List, w fyne.Window, state *AppState) {
@@ -257,14 +275,17 @@ func updateUsername(usernameChan chan string, w fyne.Window) {
 
 func Show(nxmURL string) {
 	a := app.NewWithID("eu.toldi.fusioncore")
-	w := a.NewWindow("Fusion Core")
-	w.Resize(fyne.NewSize(800, 600))
+	a.Settings().SetTheme(&fusionTheme{})
+	w := a.NewWindow("Fusion Core ☢️")
+	w.Resize(fyne.NewSize(1000, 700))
+	w.CenterOnScreen()
 
 	var progressBar *widget.ProgressBar
 	var content fyne.CanvasObject
 	var usernameLabel *widget.Label
 	var launchButton *widget.Button
 	var modList *widget.List
+	var state *AppState
 
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -275,7 +296,15 @@ func Show(nxmURL string) {
 	if err != nil {
 		showErrorDialog(err, w)
 	}
-	state := &AppState{mods: mods}
+	state = &AppState{mods: mods}
+
+	// Start single instance server
+	instance.StartServer(func(url string) {
+		w.RequestFocus()
+		if progressBar != nil && modList != nil {
+			go handleDownload(url, progressBar, modList, w, state)
+		}
+	})
 
 	usernameChan := make(chan string)
 

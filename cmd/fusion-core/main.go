@@ -9,19 +9,26 @@ import (
 
 	"github.com/bazsalanszky/fusioncore/internal/config"
 	"github.com/bazsalanszky/fusioncore/internal/gui"
+	"github.com/bazsalanszky/fusioncore/internal/instance"
 	"github.com/bazsalanszky/fusioncore/internal/mod"
 	fos "github.com/bazsalanszky/fusioncore/internal/os"
 	"github.com/bazsalanszky/fusioncore/internal/vfs"
 )
 
 func main() {
-	if len(os.Args) == 1 {
-		gui.Show("")
+	nxmURL := ""
+	if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "nxm://") {
+		nxmURL = os.Args[1]
+	}
+
+	// Try to connect to existing instance
+	if instance.TryConnect(nxmURL) {
 		return
 	}
 
-	if strings.HasPrefix(os.Args[1], "nxm://") {
-		gui.Show(os.Args[1])
+	// No existing instance, start GUI
+	if len(os.Args) == 1 || strings.HasPrefix(os.Args[1], "nxm://") {
+		gui.Show(nxmURL)
 		return
 	}
 
