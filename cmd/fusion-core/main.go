@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/bazsalanszky/fusioncore/internal/config"
+	"github.com/bazsalanszky/fusioncore/internal/games"
 	"github.com/bazsalanszky/fusioncore/internal/gui"
 	"github.com/bazsalanszky/fusioncore/internal/instance"
 	"github.com/bazsalanszky/fusioncore/internal/mod"
@@ -51,7 +52,7 @@ func main() {
 				fmt.Println("Please provide your API key with the --apikey flag.")
 				return
 			}
-			cfg := &config.Config{APIKey: *apiKeyFlag}
+			cfg := &config.Config{APIKey: *apiKeyFlag, CurrentGame: "fallout76"}
 			if err := config.SaveConfig(cfg); err != nil {
 				log.Fatalf("Failed to save config: %v", err)
 			}
@@ -80,15 +81,23 @@ func main() {
 			fmt.Printf("Mod %s deactivated successfully.\n", *deactivateModName)
 			return
 		case "list":
-			mods, err := mod.LoadMods()
+			cfg, err := config.LoadConfig()
+			if err != nil {
+				log.Fatalf("Failed to load config: %v", err)
+			}
+			game, err := games.GetGameByID(cfg.CurrentGame)
+			if err != nil {
+				log.Fatalf("Failed to get current game: %v", err)
+			}
+			mods, err := mod.LoadMods(cfg.CurrentGame)
 			if err != nil {
 				log.Fatalf("Failed to load mods: %v", err)
 			}
 			if len(mods) == 0 {
-				fmt.Println("No mods installed.")
+				fmt.Printf("No mods installed for %s.\n", game.Name)
 				return
 			}
-			fmt.Println("Installed mods:")
+			fmt.Printf("Installed mods for %s:\n", game.Name)
 			for _, m := range mods {
 				status := "inactive"
 				if m.Active {
@@ -96,6 +105,34 @@ func main() {
 				}
 				fmt.Printf("- %s (%s)\n", m.Name, status)
 			}
+			return
+		case "games":
+			fmt.Println("Supported games:")
+			for _, game := range games.GetSupportedGames() {
+				fmt.Printf("- %s (ID: %s)\n", game.Name, game.ID)
+			}
+			return
+		case "switch-game":
+			if len(os.Args) < 3 {
+				fmt.Println("Please provide a game ID. Use 'games' command to see available games.")
+				return
+			}
+			gameID := os.Args[2]
+			_, err := games.GetGameByID(gameID)
+			if err != nil {
+				fmt.Printf("Invalid game ID: %s\n", gameID)
+				return
+			}
+			cfg, err := config.LoadConfig()
+			if err != nil {
+				log.Fatalf("Failed to load config: %v", err)
+			}
+			cfg.CurrentGame = gameID
+			if err := config.SaveConfig(cfg); err != nil {
+				log.Fatalf("Failed to save config: %v", err)
+			}
+			game, _ := games.GetGameByID(gameID)
+			fmt.Printf("Switched to %s\n", game.Name)
 			return
 		}
 	}

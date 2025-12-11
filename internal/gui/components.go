@@ -5,6 +5,8 @@ import (
 	"image/color"
 	"net/url"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -13,8 +15,11 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/bazsalanszky/fusioncore/internal/config"
+	"github.com/bazsalanszky/fusioncore/internal/games"
 	"github.com/bazsalanszky/fusioncore/internal/mod"
 	"github.com/bazsalanszky/fusioncore/internal/vfs"
+	"gopkg.in/ini.v1"
 )
 
 func newAPIKeyWindow(a fyne.App, onSave func(string)) fyne.Window {
@@ -140,6 +145,8 @@ func newModList(w fyne.Window, state *AppState) (*widget.List, []*mod.Mod) {
 			modStatus := widget.NewLabel("Status")
 			modStatus.TextStyle.Italic = true
 			
+			upBtn := widget.NewButtonWithIcon("", theme.MoveUpIcon(), nil)
+			downBtn := widget.NewButtonWithIcon("", theme.MoveDownIcon(), nil)
 			activateBtn := widget.NewButtonWithIcon("", theme.MediaPlayIcon(), nil)
 			activateBtn.Importance = widget.HighImportance
 			deactivateBtn := widget.NewButtonWithIcon("", theme.MediaPauseIcon(), nil)
@@ -150,6 +157,8 @@ func newModList(w fyne.Window, state *AppState) (*widget.List, []*mod.Mod) {
 				statusIndicator,
 				modName,
 				layout.NewSpacer(),
+				upBtn,
+				downBtn,
 				activateBtn,
 				deactivateBtn,
 				uninstallBtn,
@@ -175,9 +184,11 @@ func newModList(w fyne.Window, state *AppState) (*widget.List, []*mod.Mod) {
 			
 			statusIndicator := headerRow.Objects[0].(*canvas.Circle)
 			modName := headerRow.Objects[1].(*widget.RichText)
-			activateBtn := headerRow.Objects[3].(*widget.Button)
-			deactivateBtn := headerRow.Objects[4].(*widget.Button)
-			uninstallBtn := headerRow.Objects[5].(*widget.Button)
+			upBtn := headerRow.Objects[3].(*widget.Button)
+			downBtn := headerRow.Objects[4].(*widget.Button)
+			activateBtn := headerRow.Objects[5].(*widget.Button)
+			deactivateBtn := headerRow.Objects[6].(*widget.Button)
+			uninstallBtn := headerRow.Objects[7].(*widget.Button)
 			
 			modName.ParseMarkdown(fmt.Sprintf("**%s**", m.Name))
 			
@@ -192,14 +203,54 @@ func newModList(w fyne.Window, state *AppState) (*widget.List, []*mod.Mod) {
 			}
 			statusIndicator.Refresh()
 
+			// Move up button
+			upBtn.OnTapped = func() {
+				if i > 0 {
+					state.mods[i], state.mods[i-1] = state.mods[i-1], state.mods[i]
+					if err := mod.SaveMods(state.mods, state.currentGame.ID); err != nil {
+						showErrorDialog(err, w)
+						return
+					}
+					if err := updateLoadOrder(state.mods, state.currentGame); err != nil {
+						showErrorDialog(err, w)
+					}
+					modList.Refresh()
+				}
+			}
+
+			// Move down button
+			downBtn.OnTapped = func() {
+				if i < len(state.mods)-1 {
+					state.mods[i], state.mods[i+1] = state.mods[i+1], state.mods[i]
+					if err := mod.SaveMods(state.mods, state.currentGame.ID); err != nil {
+						showErrorDialog(err, w)
+						return
+					}
+					if err := updateLoadOrder(state.mods, state.currentGame); err != nil {
+						showErrorDialog(err, w)
+					}
+					modList.Refresh()
+				}
+			}
+
+			// Disable buttons at boundaries
+			upBtn.Enable()
+			downBtn.Enable()
+			if i == 0 {
+				upBtn.Disable()
+			}
+			if i == len(state.mods)-1 {
+				downBtn.Disable()
+			}
+
 			activateBtn.OnTapped = func() {
 				vfs.Activate(m.Name)
-				state.mods, _ = mod.LoadMods()
+				state.mods, _ = mod.LoadMods(state.currentGame.ID)
 				modList.Refresh()
 			}
 			deactivateBtn.OnTapped = func() {
 				vfs.Deactivate(m.Name)
-				state.mods, _ = mod.LoadMods()
+				state.mods, _ = mod.LoadMods(state.currentGame.ID)
 				modList.Refresh()
 			}
 			uninstallBtn.OnTapped = func() {
@@ -224,7 +275,7 @@ func newModList(w fyne.Window, state *AppState) (*widget.List, []*mod.Mod) {
 							newMods = append(newMods, modEntry)
 						}
 					}
-					mod.SaveMods(newMods)
+					mod.SaveMods(newMods, state.currentGame.ID)
 					state.mods = newMods
 					modList.Refresh()
 				}, w)
@@ -260,8 +311,62 @@ func newStatusBar(w fyne.Window) (*widget.Label, *widget.Button) {
 	usernameLabel := widget.NewLabel("Fetching username...")
 	usernameLabel.TextStyle.Monospace = true
 	
-	launchButton := widget.NewButtonWithIcon("Launch Fallout 76", theme.MediaPlayIcon(), nil)
+	launchButton := widget.NewButtonWithIcon("Launch Game", theme.MediaPlayIcon(), nil)
 	launchButton.Importance = widget.HighImportance
 	
 	return usernameLabel, launchButton
+}
+
+// updateLoadOrder updates the INI file with the current mod order
+func updateLoadOrder(mods []*mod.Mod, game *games.Game) error {
+	var archives []string
+	for _, m := range mods {
+		if m.Active {
+			archiveFiles, err := findArchiveFiles(m.Path, game.ArchiveExt)
+			if err != nil {
+				return err
+			}
+			archives = append(archives, archiveFiles...)
+		}
+	}
+	return setArchiveList(archives, game)
+}
+
+// findArchiveFiles finds all archive files with the given extension in a directory
+func findArchiveFiles(dir, ext string) ([]string, error) {
+	var archiveFiles []string
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && filepath.Ext(path) == ext {
+			archiveFiles = append(archiveFiles, info.Name())
+		}
+		return nil
+	})
+	return archiveFiles, err
+}
+
+// setArchiveList sets the complete archive list in the INI file
+func setArchiveList(archives []string, game *games.Game) error {
+	prefixPath, err := game.FindCompatdata()
+	if err != nil {
+		return err
+	}
+
+	iniPath := config.GetCustomIniPath(prefixPath, game.ConfigFile)
+	cfg, err := ini.Load(iniPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			cfg = ini.Empty()
+		} else {
+			return fmt.Errorf("failed to load %s: %w", game.ConfigFile, err)
+		}
+	}
+
+	section := cfg.Section("Archive")
+	key := section.Key("sResourceArchive2List")
+	key.SetValue(strings.Join(archives, ", "))
+
+	return cfg.SaveTo(iniPath)
 }

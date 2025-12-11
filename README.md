@@ -3,7 +3,7 @@
 
 ### Powering Fallout Mods on Linux
 
-**Fusion Core** is a native Linux mod manager designed specifically for Bethesda games (Fallout 76, Fallout 4, New Vegas) running under Valve's Proton.
+**Fusion Core** is a native Linux mod manager designed specifically for Bethesda games (Fallout 76, Fallout 4, Fallout 3, New Vegas, Skyrim, Skyrim SE) running under Valve's Proton.
 
 Unlike other solutions that require complex Wine wrappers or running Windows mod managers inside the same bottle as the game, Fusion Core runs natively on your Linux OS, managing files and configurations from the outside in.
 
@@ -36,15 +36,16 @@ Modding Fallout on Linux is traditionally a headache. You usually have to:
 
 ## 🗺️ Roadmap
 
-### Phase 1: Core Systems (Current Focus)
+### Phase 1: Core Systems ✅
 
-  - [x] **Prefix Detection:** Auto-detect Steam Library and locate `compatdata` for Fallout 76 (AppID: `1151340`).
+  - [x] **Prefix Detection:** Auto-detect Steam Library and locate `compatdata` for supported games.
   - [x] **Nexus API:** Register `nxm://` protocol handler on Linux (KDE/Gnome compatible) and parse download tokens.
   - [x] **VFS (Virtual File System):** Implement the Symlink logic to map a central "Mods" folder into the Proton `Data` folder.
+  - [x] **Multi-Game Support:** Support for Fallout 76, Fallout 4, Fallout 3, New Vegas, Skyrim, and Skyrim SE.
 
 ### Phase 2: Configuration Management
 
-  - [x] **INI Parser:** Automatically generate/update `Fallout76Custom.ini` to register `.ba2` archives.
+  - [x] **INI Parser:** Automatically generate/update game-specific INI files to register archives.
   - [ ] **Load Order:** Basic UI to drag-and-drop load order (updates `plugins.txt`).
 
 ### Phase 3: GUI & Polish
@@ -72,10 +73,27 @@ git clone https://github.com/yourusername/fusion-core.git
 cd fusion-core
 
 # Build the binary
-go build -o fusion-core cmd/main.go
+go build -o fusion-core cmd/fusion-core/main.go
 
 # Run
 ./fusion-core
+```
+
+### Multi-Game Usage
+
+```bash
+# List supported games
+./fusion-core games
+
+# Switch to a different game
+./fusion-core switch-game fallout4
+
+# List mods for current game
+./fusion-core list
+
+# Activate/deactivate mods (works with current game)
+./fusion-core activate --mod "ModName"
+./fusion-core deactivate --mod "ModName"
 ```
 
 -----
@@ -84,8 +102,9 @@ go build -o fusion-core cmd/main.go
 
 Fusion Core keeps your install clean.
 
-  * **Mod Storage:** `~/Games/FusionCore/Mods/Fallout76/` (Where the actual files live)
-  * **Game Folder:** `.../steamapps/common/Fallout76/Data/` (Where we place Symlinks)
+  * **Mod Storage:** `~/Games/FusionCore/Mods/{GameName}/` (Where the actual files live)
+  * **Game Folder:** `.../steamapps/common/{GameName}/Data/` (Where we place Symlinks)
+  * **Config:** `~/.config/fusion-core/{game-id}-mods.json` (Game-specific mod lists)
 
 -----
 

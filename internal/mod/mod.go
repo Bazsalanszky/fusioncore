@@ -14,20 +14,21 @@ type Mod struct {
 	Active bool   `json:"active"`
 	ModID  string `json:"mod_id"`
 	FileID string `json:"file_id"`
+	Game   string `json:"game"`
 }
 
-// GetModsConfigPath returns the path to the mods.json file.
-func GetModsConfigPath() (string, error) {
+// GetModsConfigPath returns the path to the mods.json file for a specific game.
+func GetModsConfigPath(gameID string) (string, error) {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to get user config directory: %w", err)
 	}
-	return filepath.Join(configDir, "fusion-core", "mods.json"), nil
+	return filepath.Join(configDir, "fusion-core", gameID+"-mods.json"), nil
 }
 
-// LoadMods loads the list of mods from mods.json.
-func LoadMods() ([]*Mod, error) {
-	modsPath, err := GetModsConfigPath()
+// LoadMods loads the list of mods for a specific game.
+func LoadMods(gameID string) ([]*Mod, error) {
+	modsPath, err := GetModsConfigPath(gameID)
 	if err != nil {
 		return nil, err
 	}
@@ -49,9 +50,9 @@ func LoadMods() ([]*Mod, error) {
 	return mods, nil
 }
 
-// SaveMods saves the list of mods to mods.json.
-func SaveMods(mods []*Mod) error {
-	modsPath, err := GetModsConfigPath()
+// SaveMods saves the list of mods for a specific game.
+func SaveMods(mods []*Mod, gameID string) error {
+	modsPath, err := GetModsConfigPath(gameID)
 	if err != nil {
 		return err
 	}

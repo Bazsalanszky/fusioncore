@@ -9,7 +9,8 @@ import (
 
 // Config holds the application's configuration.
 type Config struct {
-	APIKey string `json:"api_key"`
+	APIKey      string `json:"api_key"`
+	CurrentGame string `json:"current_game"`
 }
 
 // GetConfigPath returns the path to the configuration file.
@@ -31,7 +32,7 @@ func LoadConfig() (*Config, error) {
 	file, err := os.Open(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &Config{}, nil // Return empty config if file doesn't exist
+			return &Config{CurrentGame: "fallout76"}, nil // Return empty config with default game
 		}
 		return nil, fmt.Errorf("failed to open config file: %w", err)
 	}
@@ -40,6 +41,11 @@ func LoadConfig() (*Config, error) {
 	var config Config
 	if err := json.NewDecoder(file).Decode(&config); err != nil {
 		return nil, fmt.Errorf("failed to decode config file: %w", err)
+	}
+
+	// Set default game if not set
+	if config.CurrentGame == "" {
+		config.CurrentGame = "fallout76"
 	}
 
 	return &config, nil

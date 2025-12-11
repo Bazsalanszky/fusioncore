@@ -17,6 +17,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/bazsalanszky/fusioncore/internal/config"
 	"github.com/bazsalanszky/fusioncore/internal/extractor"
+	"github.com/bazsalanszky/fusioncore/internal/games"
 	"github.com/bazsalanszky/fusioncore/internal/instance"
 	"github.com/bazsalanszky/fusioncore/internal/mod"
 	"github.com/bazsalanszky/fusioncore/internal/nexus"
@@ -24,7 +25,8 @@ import (
 )
 
 type AppState struct {
-	mods []*mod.Mod
+	mods        []*mod.Mod
+	currentGame *games.Game
 }
 
 func buildUI(w fyne.Window, state *AppState) (fyne.CanvasObject, *widget.ProgressBar, *widget.Label, *widget.Button, *widget.List) {
@@ -67,12 +69,11 @@ func buildUI(w fyne.Window, state *AppState) (fyne.CanvasObject, *widget.Progres
 				}
 				defer reader.Close()
 
-				homeDir, err := os.UserHomeDir()
+				modsDir, err := state.currentGame.GetModsDir()
 				if err != nil {
 					showErrorDialog(err, w)
 					return
 				}
-				modsDir := filepath.Join(homeDir, "Games", "FusionCore", "Mods", "Fallout76")
 
 				fileName := reader.URI().Name()
 				modName := strings.TrimSuffix(fileName, filepath.Ext(fileName))
@@ -102,15 +103,16 @@ func buildUI(w fyne.Window, state *AppState) (fyne.CanvasObject, *widget.Progres
 					Active: false,
 					ModID:  "local",
 					FileID: "local",
+					Game:   state.currentGame.ID,
 				}
 				state.mods = append(state.mods, newMod)
-				if err := mod.SaveMods(state.mods); err != nil {
+				if err := mod.SaveMods(state.mods, state.currentGame.ID); err != nil {
 					showErrorDialog(err, w)
 					return
 				}
 				modList.Refresh()
 			}, w)
-			fd.SetFilter(storage.NewExtensionFileFilter([]string{".ba2"}))
+			fd.SetFilter(storage.NewExtensionFileFilter([]string{state.currentGame.ArchiveExt}))
 			fd.Show()
 		}),
 		fyne.NewMenuItem("Load from URL (nxm://)", func() {
@@ -139,14 +141,44 @@ func buildUI(w fyne.Window, state *AppState) (fyne.CanvasObject, *widget.Progres
 		}),
 	)
 
-	gamesMenu := fyne.NewMenu("Games",
-		fyne.NewMenuItem("Fallout 76", func() {
-			// Already active
-		}),
-		fyne.NewMenuItem("Fallout 4", func() {
-			dialog.ShowInformation("Switch Game", "Fallout 4 support coming soon!", w)
-		}),
-	)
+	var gameMenuItems []*fyne.MenuItem
+	for _, game := range games.GetSupportedGames() {
+		game := game // capture loop variable
+		var menuItem *fyne.MenuItem
+		menuItem = fyne.NewMenuItem(game.Name, func() {
+			if game.ID == state.currentGame.ID {
+				return // Already active
+			}
+			cfg, err := config.LoadConfig()
+			if err != nil {
+				showErrorDialog(err, w)
+				return
+			}
+			cfg.CurrentGame = game.ID
+			if err := config.SaveConfig(cfg); err != nil {
+				showErrorDialog(err, w)
+				return
+			}
+			state.currentGame = &game
+			mods, err := mod.LoadMods(game.ID)
+			if err != nil {
+				showErrorDialog(err, w)
+				return
+			}
+			state.mods = mods
+			modList.Refresh()
+			// Update checkmarks
+			for _, item := range gameMenuItems {
+				item.Checked = false
+			}
+			menuItem.Checked = true
+		})
+		if game.ID == state.currentGame.ID {
+			menuItem.Checked = true
+		}
+		gameMenuItems = append(gameMenuItems, menuItem)
+	}
+	gamesMenu := fyne.NewMenu("Games", gameMenuItems...)
 
 	mainMenu := fyne.NewMainMenu(fileMenu, accountMenu, gamesMenu)
 	w.SetMainMenu(mainMenu)
@@ -161,6 +193,12 @@ func handleDownload(nxmURL string, progressBar *widget.ProgressBar, modList *wid
 	info, err := nexus.ParseNxmURL(nxmURL)
 	if err != nil {
 		showErrorDialog(err, w)
+		return
+	}
+
+	// Validate game compatibility
+	if info.Game != state.currentGame.NexusName {
+		dialog.ShowError(fmt.Errorf("mod is for %s but current game is %s", info.Game, state.currentGame.Name), w)
 		return
 	}
 
@@ -210,12 +248,11 @@ func handleDownload(nxmURL string, progressBar *widget.ProgressBar, modList *wid
 		return
 	}
 
-	homeDir, err := os.UserHomeDir()
+	destDir, err := state.currentGame.GetModsDir()
 	if err != nil {
 		showErrorDialog(err, w)
 		return
 	}
-	destDir := filepath.Join(homeDir, "Games", "FusionCore", "Mods", "Fallout76")
 
 	filePath, err := nexus.DownloadFile(downloadURL, destDir, func(progress float64) {
 		progressBar.SetValue(progress)
@@ -242,9 +279,10 @@ func handleDownload(nxmURL string, progressBar *widget.ProgressBar, modList *wid
 		Active: false,
 		ModID:  info.ModID,
 		FileID: info.FileID,
+		Game:   state.currentGame.ID,
 	}
 	state.mods = append(state.mods, newMod)
-	if err := mod.SaveMods(state.mods); err != nil {
+	if err := mod.SaveMods(state.mods, state.currentGame.ID); err != nil {
 		showErrorDialog(err, w)
 		return
 	}
@@ -292,11 +330,17 @@ func Show(nxmURL string) {
 		showErrorDialog(err, w)
 	}
 
-	mods, err := mod.LoadMods()
+	currentGame, err := games.GetGameByID(cfg.CurrentGame)
+	if err != nil {
+		showErrorDialog(err, w)
+		return
+	}
+
+	mods, err := mod.LoadMods(cfg.CurrentGame)
 	if err != nil {
 		showErrorDialog(err, w)
 	}
-	state = &AppState{mods: mods}
+	state = &AppState{mods: mods, currentGame: currentGame}
 
 	// Start single instance server
 	instance.StartServer(func(url string) {
@@ -314,6 +358,16 @@ func Show(nxmURL string) {
 			if err := config.SaveConfig(cfg); err != nil {
 				showErrorDialog(err, w)
 			}
+			currentGame, err := games.GetGameByID(cfg.CurrentGame)
+			if err != nil {
+				showErrorDialog(err, w)
+				return
+			}
+			mods, err := mod.LoadMods(cfg.CurrentGame)
+			if err != nil {
+				showErrorDialog(err, w)
+			}
+			state = &AppState{mods: mods, currentGame: currentGame}
 			content, progressBar, usernameLabel, launchButton, modList = buildUI(w, state)
 			w.SetContent(content)
 			go updateUsername(usernameChan, w)
@@ -338,8 +392,8 @@ func Show(nxmURL string) {
 	}()
 
 	launchButton.OnTapped = func() {
-		// This is a simple way to launch the game via Steam
-		cmd := exec.Command("steam", "steam://rungameid/1151340")
+		// Launch the current game via Steam
+		cmd := exec.Command("steam", "steam://rungameid/"+state.currentGame.AppID)
 		if err := cmd.Start(); err != nil {
 			showErrorDialog(err, w)
 		}

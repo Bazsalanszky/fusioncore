@@ -6,20 +6,30 @@ import (
 	"path/filepath"
 
 	"github.com/bazsalanszky/fusioncore/internal/config"
+	"github.com/bazsalanszky/fusioncore/internal/games"
 	"github.com/bazsalanszky/fusioncore/internal/mod"
-	"github.com/bazsalanszky/fusioncore/internal/prefix"
 )
 
 // SyncLinks creates symlinks for all active mods.
 func SyncLinks() error {
-	mods, err := mod.LoadMods()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	game, err := games.GetGameByID(cfg.CurrentGame)
+	if err != nil {
+		return fmt.Errorf("failed to get current game: %w", err)
+	}
+
+	mods, err := mod.LoadMods(cfg.CurrentGame)
 	if err != nil {
 		return fmt.Errorf("failed to load mods: %w", err)
 	}
 
-	dataDir, err := prefix.FindFallout76DataDir()
+	dataDir, err := game.FindDataDir()
 	if err != nil {
-		return fmt.Errorf("failed to find Fallout 76 data directory: %w", err)
+		return fmt.Errorf("failed to find %s data directory: %w", game.Name, err)
 	}
 
 	// First, remove all existing symlinks to avoid dangling links
@@ -39,11 +49,11 @@ func SyncLinks() error {
 	// Then, create symlinks for all active mods
 	for _, m := range mods {
 		if m.Active {
-			ba2Files, err := findBa2Files(m.Path)
+			archiveFiles, err := findArchiveFiles(m.Path, game.ArchiveExt)
 			if err != nil {
-				return fmt.Errorf("failed to find .ba2 files in mod %s: %w", m.Name, err)
+				return fmt.Errorf("failed to find %s files in mod %s: %w", game.ArchiveExt, m.Name, err)
 			}
-			for _, ba2File := range ba2Files {
+			for _, ba2File := range archiveFiles {
 				symlinkPath := filepath.Join(dataDir, ba2File)
 				targetPath := filepath.Join(m.Path, ba2File)
 				if err := os.Symlink(targetPath, symlinkPath); err != nil {
@@ -63,24 +73,34 @@ func SyncLinks() error {
 	return nil
 }
 
-// findBa2Files finds all .ba2 files in a directory.
-func findBa2Files(dir string) ([]string, error) {
-	var ba2Files []string
+// findArchiveFiles finds all archive files with the given extension in a directory.
+func findArchiveFiles(dir, ext string) ([]string, error) {
+	var archiveFiles []string
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		if !info.IsDir() && filepath.Ext(path) == ".ba2" {
-			ba2Files = append(ba2Files, info.Name())
+		if !info.IsDir() && filepath.Ext(path) == ext {
+			archiveFiles = append(archiveFiles, info.Name())
 		}
 		return nil
 	})
-	return ba2Files, err
+	return archiveFiles, err
 }
 
 // Activate activates a mod.
 func Activate(modName string) error {
-	mods, err := mod.LoadMods()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return err
+	}
+
+	game, err := games.GetGameByID(cfg.CurrentGame)
+	if err != nil {
+		return err
+	}
+
+	mods, err := mod.LoadMods(cfg.CurrentGame)
 	if err != nil {
 		return err
 	}
@@ -88,16 +108,16 @@ func Activate(modName string) error {
 	for _, m := range mods {
 		if m.Name == modName {
 			m.Active = true
-			if err := mod.SaveMods(mods); err != nil {
+			if err := mod.SaveMods(mods, cfg.CurrentGame); err != nil {
 				return err
 			}
 
-			ba2Files, err := findBa2Files(m.Path)
+			archiveFiles, err := findArchiveFiles(m.Path, game.ArchiveExt)
 			if err != nil {
 				return err
 			}
-			for _, ba2File := range ba2Files {
-				if err := config.AddArchiveToCustomIniWithPrefix(ba2File); err != nil {
+			for _, archiveFile := range archiveFiles {
+				if err := config.AddArchiveToCustomIniWithPrefix(archiveFile); err != nil {
 					return err
 				}
 			}
@@ -111,7 +131,17 @@ func Activate(modName string) error {
 
 // Deactivate deactivates a mod.
 func Deactivate(modName string) error {
-	mods, err := mod.LoadMods()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return err
+	}
+
+	game, err := games.GetGameByID(cfg.CurrentGame)
+	if err != nil {
+		return err
+	}
+
+	mods, err := mod.LoadMods(cfg.CurrentGame)
 	if err != nil {
 		return err
 	}
@@ -119,16 +149,16 @@ func Deactivate(modName string) error {
 	for _, m := range mods {
 		if m.Name == modName {
 			m.Active = false
-			if err := mod.SaveMods(mods); err != nil {
+			if err := mod.SaveMods(mods, cfg.CurrentGame); err != nil {
 				return err
 			}
 
-			ba2Files, err := findBa2Files(m.Path)
+			archiveFiles, err := findArchiveFiles(m.Path, game.ArchiveExt)
 			if err != nil {
 				return err
 			}
-			for _, ba2File := range ba2Files {
-				if err := config.RemoveArchiveFromCustomIniWithPrefix(ba2File); err != nil {
+			for _, archiveFile := range archiveFiles {
+				if err := config.RemoveArchiveFromCustomIniWithPrefix(archiveFile); err != nil {
 					return err
 				}
 			}

@@ -6,18 +6,27 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bazsalanszky/fusioncore/internal/prefix"
+	"github.com/bazsalanszky/fusioncore/internal/games"
 	"gopkg.in/ini.v1"
 )
 
+// GetCustomIniPath returns the path to the custom ini file for any game.
+func GetCustomIniPath(prefixPath, configFile string) string {
+	return filepath.Join(prefixPath, "pfx", "drive_c", "users", "steamuser", "Documents", "My Games", "Fallout 76", configFile)
+}
+
 // GetFallout76CustomIniPath returns the path to the Fallout76Custom.ini file.
 func GetFallout76CustomIniPath(prefixPath string) string {
-	return filepath.Join(prefixPath, "pfx", "drive_c", "users", "steamuser", "Documents", "My Games", "Fallout 76", "Fallout76Custom.ini")
+	return GetCustomIniPath(prefixPath, "Fallout76Custom.ini")
 }
 
 // GetFallout76CustomIniPathWithPrefix finds the prefix and returns the path to the Fallout76Custom.ini file.
 func GetFallout76CustomIniPathWithPrefix() (string, error) {
-	prefixPath, err := prefix.FindFallout76Prefix()
+	game, err := games.GetGameByID("fallout76")
+	if err != nil {
+		return "", err
+	}
+	prefixPath, err := game.FindCompatdata()
 	if err != nil {
 		return "", fmt.Errorf("failed to find Fallout 76 prefix: %w", err)
 	}
@@ -99,38 +108,42 @@ func AddArchiveToCustomIni(prefixPath, archiveName string) error {
 
 	
 
-	// AddArchiveToCustomIniWithPrefix finds the prefix and adds a new archive to the sResourceArchive2List in Fallout76Custom.ini.
+	// AddArchiveToCustomIniWithPrefix finds the prefix and adds a new archive to the sResourceArchive2List.
 
 	func AddArchiveToCustomIniWithPrefix(archiveName string) error {
-
-		prefixPath, err := prefix.FindFallout76Prefix()
-
+		cfg, err := LoadConfig()
 		if err != nil {
-
 			return err
-
 		}
-
+		game, err := games.GetGameByID(cfg.CurrentGame)
+		if err != nil {
+			return err
+		}
+		prefixPath, err := game.FindCompatdata()
+		if err != nil {
+			return err
+		}
 		return AddArchiveToCustomIni(prefixPath, archiveName)
-
 	}
 
 	
 
-	// RemoveArchiveFromCustomIniWithPrefix finds the prefix and removes an archive from the sResourceArchive2List in Fallout76Custom.ini.
+	// RemoveArchiveFromCustomIniWithPrefix finds the prefix and removes an archive from the sResourceArchive2List.
 
 	func RemoveArchiveFromCustomIniWithPrefix(archiveName string) error {
-
-		prefixPath, err := prefix.FindFallout76Prefix()
-
+		cfg, err := LoadConfig()
 		if err != nil {
-
 			return err
-
 		}
-
+		game, err := games.GetGameByID(cfg.CurrentGame)
+		if err != nil {
+			return err
+		}
+		prefixPath, err := game.FindCompatdata()
+		if err != nil {
+			return err
+		}
 		return RemoveArchiveFromCustomIni(prefixPath, archiveName)
-
 	}
 
 	
