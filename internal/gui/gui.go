@@ -373,6 +373,22 @@ func Show(nxmURL string) {
 			content, progressBar, usernameLabel, launchButton, modList = buildUI(w, state)
 			w.SetContent(content)
 			go updateUsername(usernameChan, w)
+			// Start username update loop and safe launch handler now that widgets exist
+			go func() {
+				for username := range usernameChan {
+					if usernameLabel != nil {
+						usernameLabel.SetText(username)
+					}
+				}
+			}()
+			if launchButton != nil {
+				launchButton.OnTapped = func() {
+					cmd := exec.Command("steam", "steam://rungameid/"+state.currentGame.AppID)
+					if err := cmd.Start(); err != nil {
+						showErrorDialog(err, w)
+					}
+				}
+			}
 			if nxmURL != "" {
 				go handleDownload(nxmURL, progressBar, modList, w, state)
 			}
@@ -382,22 +398,24 @@ func Show(nxmURL string) {
 		content, progressBar, usernameLabel, launchButton, modList = buildUI(w, state)
 		w.SetContent(content)
 		go updateUsername(usernameChan, w)
+		// Start username update loop and safe launch handler now that widgets exist
+		go func() {
+			for username := range usernameChan {
+				if usernameLabel != nil {
+					usernameLabel.SetText(username)
+				}
+			}
+		}()
+		if launchButton != nil {
+			launchButton.OnTapped = func() {
+				cmd := exec.Command("steam", "steam://rungameid/"+state.currentGame.AppID)
+				if err := cmd.Start(); err != nil {
+					showErrorDialog(err, w)
+				}
+			}
+		}
 		if nxmURL != "" {
 			go handleDownload(nxmURL, progressBar, modList, w, state)
-		}
-	}
-
-	go func() {
-		for username := range usernameChan {
-			usernameLabel.SetText(username)
-		}
-	}()
-
-	launchButton.OnTapped = func() {
-		// Launch the current game via Steam
-		cmd := exec.Command("steam", "steam://rungameid/"+state.currentGame.AppID)
-		if err := cmd.Start(); err != nil {
-			showErrorDialog(err, w)
 		}
 	}
 
