@@ -62,6 +62,7 @@ func newAPIKeyWindow(a fyne.App, onSave func(string)) fyne.Window {
 
 	cancelButton := widget.NewButtonWithIcon("Cancel", theme.CancelIcon(), func() {
 		w.Close()
+		a.Quit()
 	})
 
 	buttonRow := container.NewHBox(
@@ -81,6 +82,12 @@ func newAPIKeyWindow(a fyne.App, onSave func(string)) fyne.Window {
 	)
 
 	w.SetContent(container.NewPadded(content))
+	w.SetOnClosed(func() {
+		// If window is closed without saving, quit the app
+		if apiKeyEntry.Text == "" {
+			a.Quit()
+		}
+	})
 	return w
 }
 

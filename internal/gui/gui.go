@@ -397,8 +397,12 @@ func Show(nxmURL string) {
 			if nxmURL != "" {
 				go handleDownload(nxmURL, progressBar, modList, w, state)
 			}
+			// Show main window only after API key is saved
+			w.Show()
 		})
 		apiKeyWindow.Show()
+		a.Run()
+		return
 	} else {
 		content, progressBar, usernameLabel, launchButton, modList = buildUI(a, w, state)
 		w.SetContent(content)
@@ -422,7 +426,6 @@ func Show(nxmURL string) {
 		if nxmURL != "" {
 			go handleDownload(nxmURL, progressBar, modList, w, state)
 		}
+		w.ShowAndRun()
 	}
-
-	w.ShowAndRun()
 }
