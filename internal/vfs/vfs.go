@@ -27,7 +27,13 @@ func SyncLinks() error {
 		return fmt.Errorf("failed to load mods: %w", err)
 	}
 
-	dataDir, err := game.FindDataDir()
+	// Get custom path if configured
+	customPath := ""
+	if cfg.GamePaths != nil {
+		customPath = cfg.GamePaths[cfg.CurrentGame]
+	}
+
+	dataDir, err := game.FindDataDirWithCustomPath(customPath)
 	if err != nil {
 		return fmt.Errorf("failed to find %s data directory: %w", game.Name, err)
 	}

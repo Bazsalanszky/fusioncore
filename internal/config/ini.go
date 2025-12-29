@@ -22,11 +22,22 @@ func GetFallout76CustomIniPath(prefixPath string) string {
 
 // GetFallout76CustomIniPathWithPrefix finds the prefix and returns the path to the Fallout76Custom.ini file.
 func GetFallout76CustomIniPathWithPrefix() (string, error) {
+	cfg, err := LoadConfig()
+	if err != nil {
+		return "", err
+	}
 	game, err := games.GetGameByID("fallout76")
 	if err != nil {
 		return "", err
 	}
-	prefixPath, err := game.FindCompatdata()
+
+	// Get custom compatdata path if configured
+	customPath := ""
+	if cfg.CompatdataPaths != nil {
+		customPath = cfg.CompatdataPaths[game.ID]
+	}
+
+	prefixPath, err := game.FindCompatdataWithCustomPath(customPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to find Fallout 76 prefix: %w", err)
 	}
@@ -58,92 +69,91 @@ func AddArchiveToCustomIni(prefixPath, archiveName string) error {
 		}
 	}
 
-		return cfg.SaveTo(iniPath)
+	return cfg.SaveTo(iniPath)
+
+}
+
+// RemoveArchiveFromCustomIni removes an archive from the sResourceArchive2List in Fallout76Custom.ini.
+
+func RemoveArchiveFromCustomIni(prefixPath, archiveName string) error {
+
+	iniPath := GetFallout76CustomIniPath(prefixPath)
+
+	cfg, err := ini.Load(iniPath)
+
+	if err != nil {
+
+		return fmt.Errorf("failed to load Fallout76Custom.ini: %w", err)
 
 	}
 
-	
+	section := cfg.Section("Archive")
 
-	// RemoveArchiveFromCustomIni removes an archive from the sResourceArchive2List in Fallout76Custom.ini.
+	key := section.Key("sResourceArchive2List")
 
-	func RemoveArchiveFromCustomIni(prefixPath, archiveName string) error {
+	currentValue := key.String()
 
-		iniPath := GetFallout76CustomIniPath(prefixPath)
+	if strings.Contains(currentValue, archiveName) {
 
-		cfg, err := ini.Load(iniPath)
+		newValue := strings.ReplaceAll(currentValue, ", "+archiveName, "")
 
-		if err != nil {
+		newValue = strings.ReplaceAll(newValue, archiveName+", ", "")
 
-			return fmt.Errorf("failed to load Fallout76Custom.ini: %w", err)
+		newValue = strings.ReplaceAll(newValue, archiveName, "")
 
-		}
-
-	
-
-		section := cfg.Section("Archive")
-
-		key := section.Key("sResourceArchive2List")
-
-		currentValue := key.String()
-
-	
-
-		if strings.Contains(currentValue, archiveName) {
-
-			newValue := strings.ReplaceAll(currentValue, ", "+archiveName, "")
-
-			newValue = strings.ReplaceAll(newValue, archiveName+", ", "")
-
-			newValue = strings.ReplaceAll(newValue, archiveName, "")
-
-			key.SetValue(newValue)
-
-		}
-
-	
-
-		return cfg.SaveTo(iniPath)
+		key.SetValue(newValue)
 
 	}
 
-	
+	return cfg.SaveTo(iniPath)
 
-	// AddArchiveToCustomIniWithPrefix finds the prefix and adds a new archive to the sResourceArchive2List.
+}
 
-	func AddArchiveToCustomIniWithPrefix(archiveName string) error {
-		cfg, err := LoadConfig()
-		if err != nil {
-			return err
-		}
-		game, err := games.GetGameByID(cfg.CurrentGame)
-		if err != nil {
-			return err
-		}
-		prefixPath, err := game.FindCompatdata()
-		if err != nil {
-			return err
-		}
-		return AddArchiveToCustomIni(prefixPath, archiveName)
+// AddArchiveToCustomIniWithPrefix finds the prefix and adds a new archive to the sResourceArchive2List.
+func AddArchiveToCustomIniWithPrefix(archiveName string) error {
+	cfg, err := LoadConfig()
+	if err != nil {
+		return err
+	}
+	game, err := games.GetGameByID(cfg.CurrentGame)
+	if err != nil {
+		return err
 	}
 
-	
-
-	// RemoveArchiveFromCustomIniWithPrefix finds the prefix and removes an archive from the sResourceArchive2List.
-
-	func RemoveArchiveFromCustomIniWithPrefix(archiveName string) error {
-		cfg, err := LoadConfig()
-		if err != nil {
-			return err
-		}
-		game, err := games.GetGameByID(cfg.CurrentGame)
-		if err != nil {
-			return err
-		}
-		prefixPath, err := game.FindCompatdata()
-		if err != nil {
-			return err
-		}
-		return RemoveArchiveFromCustomIni(prefixPath, archiveName)
+	// Get custom compatdata path if configured
+	customPath := ""
+	if cfg.CompatdataPaths != nil {
+		customPath = cfg.CompatdataPaths[cfg.CurrentGame]
 	}
 
-	
+	prefixPath, err := game.FindCompatdataWithCustomPath(customPath)
+	if err != nil {
+		return err
+	}
+	return AddArchiveToCustomIni(prefixPath, archiveName)
+}
+
+// RemoveArchiveFromCustomIniWithPrefix finds the prefix and removes an archive from the sResourceArchive2List.
+
+func RemoveArchiveFromCustomIniWithPrefix(archiveName string) error {
+	cfg, err := LoadConfig()
+	if err != nil {
+		return err
+	}
+	game, err := games.GetGameByID(cfg.CurrentGame)
+	if err != nil {
+		return err
+	}
+
+	// Get custom compatdata path if configured
+	customPath := ""
+	if cfg.CompatdataPaths != nil {
+		customPath = cfg.CompatdataPaths[cfg.CurrentGame]
+	}
+
+	prefixPath, err := game.FindCompatdataWithCustomPath(customPath)
+	if err != nil {
+		return err
+	}
+	return RemoveArchiveFromCustomIni(prefixPath, archiveName)
+}

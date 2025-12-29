@@ -9,8 +9,10 @@ import (
 
 // Config holds the application's configuration.
 type Config struct {
-	APIKey      string `json:"api_key"`
-	CurrentGame string `json:"current_game"`
+	APIKey          string            `json:"api_key"`
+	CurrentGame     string            `json:"current_game"`
+	GamePaths       map[string]string `json:"game_paths,omitempty"`       // Maps game ID to custom game directory path
+	CompatdataPaths map[string]string `json:"compatdata_paths,omitempty"` // Maps game ID to custom compatdata directory path
 }
 
 // GetConfigPath returns the path to the configuration file.
@@ -32,7 +34,11 @@ func LoadConfig() (*Config, error) {
 	file, err := os.Open(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &Config{CurrentGame: "fallout76"}, nil // Return empty config with default game
+			return &Config{
+				CurrentGame:     "fallout76",
+				GamePaths:       make(map[string]string),
+				CompatdataPaths: make(map[string]string),
+			}, nil // Return empty config with default game
 		}
 		return nil, fmt.Errorf("failed to open config file: %w", err)
 	}
@@ -46,6 +52,16 @@ func LoadConfig() (*Config, error) {
 	// Set default game if not set
 	if config.CurrentGame == "" {
 		config.CurrentGame = "fallout76"
+	}
+
+	// Initialize GamePaths if nil
+	if config.GamePaths == nil {
+		config.GamePaths = make(map[string]string)
+	}
+
+	// Initialize CompatdataPaths if nil
+	if config.CompatdataPaths == nil {
+		config.CompatdataPaths = make(map[string]string)
 	}
 
 	return &config, nil

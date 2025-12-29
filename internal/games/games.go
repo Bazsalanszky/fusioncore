@@ -133,7 +133,24 @@ func FindSteamRoot() (string, error) {
 }
 
 // FindGameDir finds the game directory for a specific game
+// customPath can be provided from config to override auto-discovery
 func (g *Game) FindGameDir() (string, error) {
+	return g.FindGameDirWithCustomPath("")
+}
+
+// FindGameDirWithCustomPath finds the game directory with an optional custom path
+func (g *Game) FindGameDirWithCustomPath(customPath string) (string, error) {
+	// First check if there's a custom path provided
+	if customPath != "" {
+		// Verify the custom path exists
+		if _, err := os.Stat(customPath); err == nil {
+			return customPath, nil
+		}
+		// If custom path is set but doesn't exist, return an error
+		return "", fmt.Errorf("%s game directory not found at configured path: %s", g.Name, customPath)
+	}
+
+	// Fall back to auto-discovery
 	steamRoot, err := FindSteamRoot()
 	if err != nil {
 		return "", err
@@ -144,12 +161,17 @@ func (g *Game) FindGameDir() (string, error) {
 		return gameDir, nil
 	}
 
-	return "", fmt.Errorf("%s game directory not found", g.Name)
+	return "", fmt.Errorf("%s game directory not found. Please set the game path in Settings", g.Name)
 }
 
 // FindDataDir finds the Data directory for a specific game
 func (g *Game) FindDataDir() (string, error) {
-	gameDir, err := g.FindGameDir()
+	return g.FindDataDirWithCustomPath("")
+}
+
+// FindDataDirWithCustomPath finds the Data directory with an optional custom game path
+func (g *Game) FindDataDirWithCustomPath(customGamePath string) (string, error) {
+	gameDir, err := g.FindGameDirWithCustomPath(customGamePath)
 	if err != nil {
 		return "", err
 	}
@@ -164,17 +186,34 @@ func (g *Game) FindDataDir() (string, error) {
 
 // FindCompatdata finds the compatdata directory for a specific game
 func (g *Game) FindCompatdata() (string, error) {
+	return g.FindCompatdataWithCustomPath("")
+}
+
+// FindCompatdataWithCustomPath finds the compatdata directory with an optional custom path
+func (g *Game) FindCompatdataWithCustomPath(customPath string) (string, error) {
+	// First check if there's a custom path provided
+	if customPath != "" {
+		// Verify the custom path exists
+		if _, err := os.Stat(customPath); err == nil {
+			return customPath, nil
+		}
+		// If custom path is set but doesn't exist, return an error
+		return "", fmt.Errorf("compatdata directory not found at configured path: %s", customPath)
+	}
+
+	// Fall back to auto-discovery
 	steamRoot, err := FindSteamRoot()
 	if err != nil {
 		return "", err
 	}
 
 	compatdataPath := filepath.Join(steamRoot, "steamapps", "compatdata", g.AppID)
+	fmt.Printf("Looking for compatdata at: %s\n", compatdataPath)
 	if _, err := os.Stat(compatdataPath); err == nil {
 		return compatdataPath, nil
 	}
 
-	return "", fmt.Errorf("compatdata directory not found for %s", g.Name)
+	return "", fmt.Errorf("compatdata directory not found for %s. Please set the compatdata path in Settings", g.Name)
 }
 
 // GetModsDir returns the mods directory for a specific game

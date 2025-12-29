@@ -30,7 +30,7 @@ type AppState struct {
 	currentGame *games.Game
 }
 
-func buildUI(w fyne.Window, state *AppState) (fyne.CanvasObject, *widget.ProgressBar, *widget.Label, *widget.Button, *widget.List) {
+func buildUI(a fyne.App, w fyne.Window, state *AppState) (fyne.CanvasObject, *widget.ProgressBar, *widget.Label, *widget.Button, *widget.List) {
 	header := newHeader(w)
 	usernameLabel, launchButton := newStatusBar(w)
 	modList, _ := newModList(w, state)
@@ -123,6 +123,11 @@ func buildUI(w fyne.Window, state *AppState) (fyne.CanvasObject, *widget.Progres
 					go handleDownload(entry.Text, progressBar, modList, w, state)
 				}
 			}, w)
+		}),
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Settings", func() {
+			settingsWin := newSettingsWindow(a, w, state)
+			settingsWin.Show()
 		}),
 	)
 
@@ -370,7 +375,7 @@ func Show(nxmURL string) {
 				showErrorDialog(err, w)
 			}
 			state = &AppState{mods: mods, currentGame: currentGame}
-			content, progressBar, usernameLabel, launchButton, modList = buildUI(w, state)
+			content, progressBar, usernameLabel, launchButton, modList = buildUI(a, w, state)
 			w.SetContent(content)
 			go updateUsername(usernameChan, w)
 			// Start username update loop and safe launch handler now that widgets exist
@@ -395,7 +400,7 @@ func Show(nxmURL string) {
 		})
 		apiKeyWindow.Show()
 	} else {
-		content, progressBar, usernameLabel, launchButton, modList = buildUI(w, state)
+		content, progressBar, usernameLabel, launchButton, modList = buildUI(a, w, state)
 		w.SetContent(content)
 		go updateUsername(usernameChan, w)
 		// Start username update loop and safe launch handler now that widgets exist
