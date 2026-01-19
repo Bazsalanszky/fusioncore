@@ -9,7 +9,7 @@ Unlike other solutions that require complex Wine wrappers or running Windows mod
 
 -----
 
-## 🚀 The Problem
+##  Problem
 
 Modding Fallout on Linux is traditionally a headache. You usually have to:
 
@@ -17,7 +17,7 @@ Modding Fallout on Linux is traditionally a headache. You usually have to:
 2.  Deal with broken UI rendering or .NET dependencies in Wine.
 3.  Struggle to handle `nxm://` links from your Linux browser to the Wine application.
 
-## 💡 The Solution
+##  Solution
 
 **Fusion Core** simplifies this by treating the Proton Prefix (`compatdata`) as just another directory.
 
@@ -46,16 +46,30 @@ Modding Fallout on Linux is traditionally a headache. You usually have to:
 ### Phase 2: Configuration Management
 
   - [x] **INI Parser:** Automatically generate/update game-specific INI files to register archives.
-  - [ ] **Load Order:** Basic UI to drag-and-drop load order (updates `plugins.txt`).
+  - [x] **Load Order:** Basic UI to drag-and-drop load order (updates `plugins.txt`).
 
 ### Phase 3: GUI & Polish
 
   - [ ] **Mod Library UI:** Visual grid of installed mods with metadata (Version, Author, Description).
   - [ ] **Profiles:** Switch between "Adventure Mode" and "Nuclear Winter" (RIP) or other mod setups instantly.
+  - [ ] **Auto-Updates:** Check for mod updates via Nexus API and notify users.
+  - [ ] **Backup/Restore:** One-click backup and restore of mod setups and INI configurations.
+  - [ ] **Advanced Load Order:** Integrate with LOOT for automatic load order sorting.
+
+## Support Matrix
+
+| Game            | Status        |
+|-----------------|---------------|
+| Fallout 76     | ✅ Supported  |
+| Fallout 4      | ❌ Tested, not working |
+| Fallout 3      | ❓ Not tested yet, need feedback |
+| Fallout: New Vegas | ❓ Not tested yet, need feedback |
+| Skyrim         | ❓ Not tested yet, need feedback |
+| Skyrim SE      | ❓ Not tested yet, need feedback |
 
 -----
 
-## ⚡ Getting Started (For Developers)
+## Getting Started (For Developers)
 
 ### Prerequisites
 
@@ -108,16 +122,12 @@ Fusion Core keeps your install clean.
 
 -----
 
-## 🤝 Contributing
+## Contributing
 
 Pull requests are welcome\! If you know Go, Linux file systems, or the Nexus API, please help us build the best modding experience for Linux gamers.
 
-## 📜 License
+## License
 
 MIT License.
 
------
 
-*Ad Victoriam
-
------
